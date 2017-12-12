@@ -41,7 +41,8 @@ class DemoFrame(Frame):
         layout.add_widget(TextBox(5,
                                   label="My First Box:",
                                   name="TA",
-                                  on_change=self._on_change), 1)
+                                  on_change=self._on_change,
+                                  formatter=self._formatter), 1)
         layout.add_widget(
             Text(label="Alpha:",
                  name="TB",
@@ -87,6 +88,13 @@ class DemoFrame(Frame):
         layout2.add_widget(Button("View Data", self._view), 1)
         layout2.add_widget(Button("Quit", self._quit), 2)
         self.fix()
+
+    def _formatter(self, context, text, x, y, fg, attr, bg):
+        start, line = context
+        if "peter" in text:
+            self.canvas.print_at(text, x, y, fg, attr, bg)
+        else:
+            self.canvas.print_at(text, x, y, line, attr, bg)
 
     def _on_change(self):
         changed = False

@@ -1196,13 +1196,14 @@ class Widget(with_metaclass(ABCMeta, object)):
     #: fit the available vertical space in the Layout.
     FILL_FRAME = -135792468
 
-    def __init__(self, name, tab_stop=True, on_focus=None, on_blur=None):
+    def __init__(self, name, tab_stop=True, on_focus=None, on_blur=None, formatter=None):
         """
         :param name: The name of this Widget.
         :param tab_stop: Whether this widget should take focus or not when
                          tabbing around the Frame.
         :param on_focus: Optional callback whenever this widget gets the focus.
         :param on_blur: Optional callback whenever this widget loses the focus.
+        :param formatter: Optional callback whenever drawing the contents of this widget.
         """
         super(Widget, self).__init__()
         # Internal properties
@@ -1221,6 +1222,7 @@ class Widget(with_metaclass(ABCMeta, object)):
         self._custom_colour = None
         self._on_focus = on_focus
         self._on_blur = on_blur
+        self._formatter = formatter
 
     @property
     def frame(self):
@@ -1348,6 +1350,25 @@ class Widget(with_metaclass(ABCMeta, object)):
         self._has_focus = False
         if self._on_blur is not None:
             self._on_blur()
+
+    def _call_formatter(self, context, text, x, y, fg, attr, bg):
+        """
+        Call the formatter or draw to screen if none is specified.
+
+        :param context: Context to pass to the formatter for what is about to be displayed.
+            Although this will vary from widget to widget, it should always be a list.
+        :param text: The (single line) text to be printed.
+        :param x: The column (x coord) for the start of the text.
+        :param y: The line (y coord) for the start of the text.
+        :param fg: The foreground colour of the text to be displayed.
+        :param attr: The cell attribute of the text to be displayed.
+        :param bg: The background colour of the text to be displayed.
+        """
+        if self._formatter:
+            # TODO: Is this definition of context good enough?
+            self._formatter(context, text, x, y, fg, attr, bg)
+        else:
+            self._frame.canvas.print_at(text, x, y, fg, attr, bg)
 
     def _draw_label(self):
         """
@@ -1487,8 +1508,7 @@ class Label(Widget):
     def update(self, frame_no):
         (colour, attr, bg) = self._frame.palette["label"]
         for i, text in enumerate(_split_text(self._text, self._w, self._h)):
-            self._frame.canvas.paint(
-                text, self._x, self._y + i, colour, attr, bg)
+            self._frame.canvas.print_at(text, self._x, self._y + i, colour, attr, bg)
 
     def reset(self):
         pass
@@ -1596,11 +1616,8 @@ class Text(Widget):
         if self._hide_char:
             text = self._hide_char[0] * len(text)
         text += " " * (width - wcswidth(text))
-        self._frame.canvas.print_at(
-            text,
-            self._x + self._offset,
-            self._y,
-            colour, attr, bg)
+        args = [text, self._x + self._offset, self._y, colour, attr, bg]
+        self._call_formatter([self._start_column], *args)
 
         # Since we switch off the standard cursor, we need to emulate our own
         # if we have the input focus.
@@ -1728,11 +1745,8 @@ class CheckBox(Widget):
             self._y,
             colour, attr, bg)
         (colour, attr, bg) = self._pick_colours("field", self._has_focus)
-        self._frame.canvas.print_at(
-            self._text,
-            self._x + self._offset + 4,
-            self._y,
-            colour, attr, bg)
+        args = [self._text, self._x + self._offset + 4, self._y, colour, attr, bg]
+        self._call_formatter([], *args)
 
     def reset(self):
         pass
@@ -1814,11 +1828,8 @@ class RadioButtons(Widget):
                 self._x + self._offset,
                 self._y + i,
                 fg, attr, bg)
-            self._frame.canvas.print_at(
-                text,
-                self._x + self._offset + 4,
-                self._y + i,
-                fg2, attr2, bg2)
+            args = [text, self._x + self._offset + 4, self._y + i, fg2, attr2, bg2]
+            self._call_formatter([i], *args)
 
     def reset(self):
         pass
@@ -1929,11 +1940,11 @@ class TextBox(Widget):
         # Render visible portion of the text.
         for i, text in enumerate(self._value):
             if self._start_line <= i < self._start_line + height:
-                self._frame.canvas.print_at(
-                    _enforce_width(text[self._start_column:], width),
-                    self._x + self._offset + dx,
-                    self._y + i + dy - self._start_line,
-                    colour, attr, bg)
+                args = [_enforce_width(text[self._start_column:], width),
+                        self._x + self._offset + dx,
+                        self._y + i + dy - self._start_line,
+                        colour, attr, bg]
+                self._call_formatter([self._start_column, i], *args)
 
         # Since we switch off the standard cursor, we need to emulate our own
         # if we have the input focus.
@@ -2091,7 +2102,7 @@ class _BaseListBox(with_metaclass(ABCMeta, Widget)):
     """
 
     def __init__(self, height, options, titles=None, label=None, name=None, on_change=None,
-                 on_select=None, validator=None):
+                 on_select=None, validator=None, formatter=None):
         """
         :param height: The required number of input lines for this widget.
         :param options: The options for each row in the widget.
@@ -2101,8 +2112,9 @@ class _BaseListBox(with_metaclass(ABCMeta, Widget)):
         :param on_select: Optional function to call when the user actually selects an entry from
             this list - e.g. by double-clicking or pressing Enter.
         :param validator: Optional function to validate selection for this widget.
+        :param formatter: Optional callback whenever drawing the contents of this widget.
         """
-        super(_BaseListBox, self).__init__(name)
+        super(_BaseListBox, self).__init__(name, formatter=formatter)
         self._options = options
         self._titles = titles
         self._label = label
@@ -2311,11 +2323,11 @@ class ListBox(_BaseListBox):
         for i, (text, _) in enumerate(self._options):
             if start_line <= i < start_line + height - y_offset:
                 colour, attr, bg = self._pick_colours("field", i == self._line)
-                self._frame.canvas.print_at(
-                    "{:{}}".format(_enforce_width(text, width), width),
-                    self._x + self._offset + dx,
-                    self._y + y_offset + i + dy - start_line,
-                    colour, attr, bg)
+                args = ["{:{}}".format(_enforce_width(text, width), width),
+                        self._x + self._offset + dx,
+                        self._y + y_offset + i + dy - start_line,
+                        colour, attr, bg]
+                self._call_formatter([i], *args)
 
     def _find_option(self, search_value):
         for text, value in self._options:
@@ -2331,7 +2343,7 @@ class MultiColumnListBox(_BaseListBox):
     """
 
     def __init__(self, height, columns, options, titles=None, label=None,
-                 name=None, on_change=None, on_select=None):
+                 name=None, on_change=None, on_select=None, formatter=None):
         """
         :param height: The required number of input lines for this ListBox.
         :param columns: A list of widths and alignments for each column.
@@ -2342,6 +2354,7 @@ class MultiColumnListBox(_BaseListBox):
         :param name: The name for the ListBox.
         :param on_change: Optional function to call when selection changes.
         :param on_select: Optional function to call when the user actually selects an entry from
+        :param formatter: Optional callback whenever drawing the contents of this widget.
 
         The `columns` parameter is a list of integers or strings.  If it is an
         integer, this is the absolute width of the column in characters.  If it
@@ -2375,7 +2388,7 @@ class MultiColumnListBox(_BaseListBox):
         """
         super(MultiColumnListBox, self).__init__(
             height, options, titles=titles, label=label, name=name, on_change=on_change,
-            on_select=on_select)
+            on_select=on_select, formatter=formatter)
         self._columns = []
         self._align = []
         self._spacing = []
@@ -2451,18 +2464,19 @@ class MultiColumnListBox(_BaseListBox):
                 row_dx = 0
                 # Try to handle badly formatted data, where row lists don't
                 # match the expected number of columns.
-                for text, width, align, space in zip_longest(
-                        row, self._columns, self._align, self._spacing, fillvalue=""):
+                for j, (text, width, align, space) in enumerate(zip_longest(
+                        row, self._columns, self._align, self._spacing, fillvalue="")):
                     if width == "":
                         break
                     width = self._get_width(width)
                     if len(text) >= width:
                         text = text[:width - 3] + "..."
-                    self._frame.canvas.print_at(
-                        "{}{:{}{}}".format(" " * space, _enforce_width(text, width), align, width),
-                        self._x + self._offset + dx + row_dx,
-                        self._y + i + dy - self._start_line,
-                        colour, attr, bg)
+                    text = "{}{:{}{}}".format(
+                        " " * space, _enforce_width(text, width), align, width)
+                    x = self._x + self._offset + dx + row_dx
+                    y = self._y + i + dy - self._start_line
+                    args = [text, x, y, colour, attr, bg]
+                    self._call_formatter([i, j], *args)
                     row_dx += width + space
 
     def _find_option(self, search_value):
