@@ -306,7 +306,7 @@ class Frame(Effect):
     def __init__(self, screen, height, width, data=None, on_load=None,
                  has_border=True, hover_focus=False, name=None, title=None,
                  x=None, y=None, has_shadow=False, reduce_cpu=False, is_modal=False,
-                 can_scroll=True):
+                 can_scroll=True, destroy_window=None):
         """
         :param screen: The Screen that owns this Frame.
         :param width: The desired width of the Frame.
@@ -350,6 +350,7 @@ class Frame(Effect):
         self._reduce_cpu = reduce_cpu
         self._is_modal = is_modal
         self._has_focus = False
+        self._destroy_window = destroy_window
 
         # A unique name is needed for cloning.  Try our best to get one!
         self._name = title if name is None else name
@@ -364,6 +365,16 @@ class Frame(Effect):
 
         # Optimization for non-unicode displays to avoid slow unicode calls.
         self.string_len = wcswidth if self._canvas.unicode_aware else len
+
+    
+    def _destroy_window_stack(self):
+        """
+        Destroys the entire stack of Frames.
+        """
+        self._scene.remove_effect(self)
+        if self._destroy_window:
+            self._destroy_window._destroy_window_stack()
+        return
 
     def _get_pos(self):
         """
