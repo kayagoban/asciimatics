@@ -13,6 +13,7 @@ from types import FunctionType
 import re
 import os
 import unicodedata
+from random import random, randrange
 from builtins import chr
 from builtins import range
 from builtins import object
@@ -29,6 +30,8 @@ from asciimatics.screen import Screen, Canvas
 from asciimatics.utilities import readable_timestamp, readable_mem, _DotDict
 from wcwidth import wcswidth, wcwidth
 
+from tui.debug import debug
+
 # Logging
 from logging import getLogger
 logger = getLogger(__name__)
@@ -44,6 +47,21 @@ _THEMES = {
             "title": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
             "selected_focus_field": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
             "focus_edit_text": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
+            "focus_button": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
+            "selected_focus_control": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
+            "disabled": (Screen.COLOUR_BLACK, Screen.A_BOLD, Screen.COLOUR_BLACK),
+        }
+    ),
+    "shadowlands": defaultdict(
+        lambda: (Screen.COLOUR_GREEN, Screen.A_NORMAL, Screen.COLOUR_BLACK),
+        {
+            "invalid": (Screen.COLOUR_BLACK, Screen.A_NORMAL, Screen.COLOUR_RED),
+            "label": (Screen.COLOUR_GREEN, Screen.A_NORMAL, Screen.COLOUR_BLACK),
+            "focus_label": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
+            "title": (Screen.COLOUR_GREEN, Screen.A_BOLD, Screen.COLOUR_BLACK),
+            "selected_focus_field": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
+            "focus_edit_text": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
+            "edit_text": (Screen.COLOUR_GREEN, Screen.A_BOLD, Screen.COLOUR_BLACK),
             "focus_button": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
             "selected_focus_control": (Screen.COLOUR_WHITE, Screen.A_BOLD, Screen.COLOUR_BLACK),
             "disabled": (Screen.COLOUR_BLACK, Screen.A_BOLD, Screen.COLOUR_BLACK),
@@ -365,6 +383,16 @@ class Frame(Effect):
             pos = int(round(max(0, pos), 0))
             self._canvas.scroll_to(pos)
 
+    def prepend_layout(self, layout):
+        """
+        Prepend a Layout to the other Layouts in the Frame.
+
+        :param layout: The Layout to be prepended.
+        """
+        layout.register_frame(self)
+        self._layouts = [layout] + self._layouts
+
+
     def add_layout(self, layout):
         """
         Add a Layout to the Frame.
@@ -396,7 +424,10 @@ class Frame(Effect):
         for _ in range(2):
             # Pick starting point/height - varies for borders.
             if self._has_border:
-                x = y = start_y = 1
+                #x = y = start_y = 1
+                y = start_y = 1
+                x = 2
+
                 height = self._canvas.height - 2
                 width = self._canvas.width - 2
             else:
@@ -1498,6 +1529,20 @@ class Widget(with_metaclass(ABCMeta, object)):
         if self._on_blur is not None:
             self._on_blur()
 
+    def _replace_char(self, text, index, replacement):
+        return text[:index] + replacement + text[index + 1:]
+
+    
+    def _snow_text(self, text):
+        if len(text) == 0 or random() > 0.01:
+            return text
+
+        # 1% of the time, wreak some havok.
+        unlucky_char = randrange(0, len(text))
+        static = chr(randrange(128, 500))
+        return self._replace_char(text, unlucky_char, static)
+
+
     def _draw_label(self):
         """
         Draw the label for this widget if needed.
@@ -1509,11 +1554,17 @@ class Widget(with_metaclass(ABCMeta, object)):
                 self._display_label = _split_text(
                     self._label, self._offset, self._h, self._frame.canvas.unicode_aware)
 
+               
             # Draw the  display label.
-            (colour, attr, bg) = self._frame.palette["label"]
-            for i, text in enumerate(self._display_label):
-                self._frame.canvas.paint(
-                    text, self._x, self._y + i, colour, attr, bg)
+            if self._has_focus:
+                (colour, attr, bg) = self._frame.palette["focus_label"]
+            else:
+                (colour, attr, bg) = self._frame.palette["label"]
+                
+            if not self._is_disabled:
+                for i, text in enumerate(self._display_label):
+                    self._frame.canvas.paint(
+                        self._snow_text(text), self._x, self._y + i, colour, attr, bg)
 
     def _draw_cursor(self, char, frame_no, x, y):
         """
@@ -1616,7 +1667,7 @@ class Label(Widget):
     A text label.
     """
 
-    def __init__(self, label, height=1, align="<"):
+    def __init__(self, label, height=1, align="<", name=None):
         """
         :param label: The text to be displayed for the Label.
         :param height: Optional height for the label.  Defaults to 1 line.
@@ -1625,7 +1676,7 @@ class Label(Widget):
 
         """
         # Labels have no value and so should have no name for look-ups either.
-        super(Label, self).__init__(None, tab_stop=False)
+        super(Label, self).__init__(name, tab_stop=False)
         # Although this is a label, we don't want it to contribute to the layout
         # tab calculations, so leave internal `_label` value as None.
         self._text = label
@@ -1739,8 +1790,12 @@ class Text(Widget):
         self._on_change = on_change
         self._validator = validator
         self._hide_char = hide_char
+        self._value = ""
 
     def update(self, frame_no):
+        if self._is_disabled:
+            return
+
         self._draw_label()
 
         # Calculate new visible limits if needed.
@@ -1778,6 +1833,8 @@ class Text(Widget):
         self._column = len(self._value)
 
     def process_event(self, event):
+
+        #debug(self._frame._screen._screen); import pdb; pdb.set_trace()
         if isinstance(event, KeyboardEvent):
             if event.key_code == Screen.KEY_BACK:
                 if self._column > 0:
@@ -2895,7 +2952,11 @@ class Button(Widget):
         """
         super(Button, self).__init__(None, **kwargs)
         # We nly ever draw the button with borders, so calculate that once now.
-        self._text = "< {} >".format(text) if add_box else text
+        #self._text = "< {} >".format(text) if add_box else text
+        '''╞ ╡⦀║╿╒╓╔ ╔'''
+        #self._text = "╿▔ {} ▁╽".format(text) if add_box else text
+        #self._text = "╠ {} ╣".format(text) if add_box else text
+        self._text = "╞ {} ╡".format(text) if add_box else text
         self._add_box = add_box
         self._on_click = on_click
         self._label = label
