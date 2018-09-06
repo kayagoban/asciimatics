@@ -31,6 +31,8 @@ from asciimatics.utilities import readable_timestamp, readable_mem, _DotDict
 from wcwidth import wcswidth, wcwidth
 
 from tui.debug import debug
+import pdb
+#debug(self); pdb.set_trace()
 
 # Logging
 from logging import getLogger
@@ -371,6 +373,7 @@ class Frame(Effect):
         """
         Destroys the entire stack of Frames.
         """
+
         self._scene.remove_effect(self)
         if self._destroy_window:
             self._destroy_window._destroy_window_stack()
@@ -1781,8 +1784,8 @@ class Text(Widget):
     It consists of an optional label and an entry box.
     """
 
-    def __init__(self, label=None, name=None, on_change=None, validator=None, hide_char=None,
-                 **kwargs):
+    def __init__(self, label=None, name=None, on_change=None, validator=None, hide_char=None, 
+                 default_value="", **kwargs):
         """
         :param label: An optional label for the widget.
         :param name: The name for the widget.
@@ -1801,7 +1804,7 @@ class Text(Widget):
         self._on_change = on_change
         self._validator = validator
         self._hide_char = hide_char
-        self._value = ""
+        self._value = default_value
 
     def update(self, frame_no):
         if self._is_disabled:
@@ -1845,7 +1848,6 @@ class Text(Widget):
 
     def process_event(self, event):
 
-        #debug(self._frame._screen._screen); import pdb; pdb.set_trace()
         if isinstance(event, KeyboardEvent):
             if event.key_code == Screen.KEY_BACK:
                 if self._column > 0:
