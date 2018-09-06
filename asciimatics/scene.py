@@ -78,6 +78,7 @@ class Scene(object):
         """
         effect.register_scene(self)
         self._effects.append(effect)
+        effect.reset()
 
     def remove_effect(self, effect):
         """
