@@ -1578,7 +1578,7 @@ class Widget(with_metaclass(ABCMeta, object)):
             if not self._is_disabled:
                 for i, text in enumerate(self._display_label):
                     self._frame.canvas.paint(
-                        self._snow_text(text), self._x, self._y + i, colour, attr, bg)
+                        text, self._x, self._y + i, colour, attr, bg)
 
     def _draw_cursor(self, char, frame_no, x, y):
         """
