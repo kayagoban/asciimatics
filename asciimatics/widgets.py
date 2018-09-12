@@ -1570,7 +1570,7 @@ class Widget(with_metaclass(ABCMeta, object)):
 
                
             # Draw the  display label.
-            if self._has_focus:
+            if self._has_focus and "focuslabel" in self._frame.palette:
                 (colour, attr, bg) = self._frame.palette["focus_label"]
             else:
                 (colour, attr, bg) = self._frame.palette["label"]
