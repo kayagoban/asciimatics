@@ -30,8 +30,8 @@ from asciimatics.screen import Screen, Canvas
 from asciimatics.utilities import readable_timestamp, readable_mem, _DotDict
 from wcwidth import wcswidth, wcwidth
 
-from tui.debug import debug
-import pdb
+#from tui.debug import debug
+#import pdb
 #debug(self); pdb.set_trace()
 
 # Logging
