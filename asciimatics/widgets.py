@@ -1675,6 +1675,7 @@ class Widget(with_metaclass(ABCMeta, object)):
         :param width: The total width of the widget, including labels.
         """
 
+  
 
 class Label(Widget):
     """
@@ -1704,9 +1705,15 @@ class Label(Widget):
     def update(self, frame_no):
         (colour, attr, bg) = self._frame.palette["label"]
         for i, text in enumerate(
-                _split_text(self._text, self._w, self._h, self._frame.canvas.unicode_aware)):
+                _split_text(self._current_text(), self._w, self._h, self._frame.canvas.unicode_aware)):
             self._frame.canvas.paint(
                 "{:{}{}}".format(text, self._align, self._w), self._x, self._y + i, colour, attr, bg)
+
+    def _current_text(self):
+        if self._text.__class__ == str:
+            return self._text
+        else:
+            return self._text()
 
     def reset(self):
         pass
@@ -1720,7 +1727,7 @@ class Label(Widget):
         """
         The current text for this Label.
         """
-        return self._text
+        return self._current_text()
 
     @text.setter
     def text(self, new_value):
@@ -1728,7 +1735,7 @@ class Label(Widget):
 
     @property
     def value(self):
-        return self._value
+        return self._current_text()
 
 
 class Divider(Widget):
