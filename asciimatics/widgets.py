@@ -2684,7 +2684,7 @@ class ListBox(_BaseListBox):
             elif len(self._current_options) > 0 and event.key_code == Screen.KEY_DOWN:
                 # Move down one line in text - use value to trigger on_select.
                 self._line = min(len(self._current_options) - 1, self._line + 1)
-                self.value = self._options[self._line][1]
+                self.value = self._current_options[self._line][1]
             elif len(self._current_options) > 0 and event.key_code == Screen.KEY_PAGE_UP:
                 # Move up one page.
                 self._line = max(0, self._line - self._h + (1 if self._titles else 0))
