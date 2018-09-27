@@ -2613,7 +2613,7 @@ class ListBox(_BaseListBox):
                 colour, attr, bg)
 
         # Don't bother with anything else if there are no options to render.
-        if len(self._options) <= 0:
+        if len(self._current_options) <= 0:
             return
 
         # Decide whether we need to show or hide the scroll bar.
@@ -2635,7 +2635,7 @@ class ListBox(_BaseListBox):
         if self._start_line < 0:
             y_offset = -self._start_line
             start_line = 0
-        for i, (text, _) in enumerate(self._options):
+        for i, (text, _) in enumerate(self._current_options):
             if start_line <= i < start_line + height - y_offset:
                 colour, attr, bg = self._pick_colours("field", i == self._line)
                 if len(text) > width:
@@ -2652,7 +2652,7 @@ class ListBox(_BaseListBox):
             self._scroll_bar.update()
 
     def _find_option(self, search_value):
-        for text, value in self._options:
+        for text, value in self._current_options:
             if text.startswith(search_value):
                 return value
         return None
@@ -2661,19 +2661,142 @@ class ListBox(_BaseListBox):
         """
         Get current position for scroll bar.
         """
-        if self._h >= len(self._options):
+        if self._h >= len(self._current_options):
             return 0
         else:
-            return self._start_line / (len(self._options) - self._h)
+            return self._start_line / (len(self._current_options) - self._h)
 
     def _set_pos(self, pos):
         """
         Set current position for scroll bar.
         """
-        if self._h < len(self._options):
-            pos *= len(self._options) - self._h
+        if self._h < len(self._current_options):
+            pos *= len(self._current_options) - self._h
             pos = int(round(max(0, pos), 0))
             self._start_line = pos
+
+    def process_event(self, event):
+        if isinstance(event, KeyboardEvent):
+            if len(self._current_options) > 0 and event.key_code == Screen.KEY_UP:
+                # Move up one line in text - use value to trigger on_select.
+                self._line = max(0, self._line - 1)
+                self.value = self._options[self._line][1]
+            elif len(self._current_options) > 0 and event.key_code == Screen.KEY_DOWN:
+                # Move down one line in text - use value to trigger on_select.
+                self._line = min(len(self._current_options) - 1, self._line + 1)
+                self.value = self._options[self._line][1]
+            elif len(self._current_options) > 0 and event.key_code == Screen.KEY_PAGE_UP:
+                # Move up one page.
+                self._line = max(0, self._line - self._h + (1 if self._titles else 0))
+                self.value = self._current_options[self._line][1]
+            elif len(self._current_options) > 0 and event.key_code == Screen.KEY_PAGE_DOWN:
+                # Move down one page.
+                self._line = min(
+                    len(self._current_options) - 1, self._line + self._h - (1 if self._titles else 0))
+                self.value = self._current_options[self._line][1]
+            elif event.key_code in [Screen.ctrl("m"), Screen.ctrl("j")]:
+                # Fire select callback.
+                if self._on_select:
+                    self._on_select()
+            elif event.key_code > 0:
+                # Treat any other normal press as a search
+                now = datetime.now()
+                if now - self._last_search >= timedelta(seconds=1):
+                    self._search = ""
+                self._search += chr(event.key_code)
+                self._last_search = now
+
+                # If we find a new match for the search string, update the list selection
+                new_value = self._find_option(self._search)
+                if new_value is not None:
+                    self.value = new_value
+            else:
+                return event
+        elif isinstance(event, MouseEvent):
+            # Mouse event - adjust for scroll bar as needed.
+            if event.buttons != 0:
+                # Check for normal widget.
+                if (len(self._current_options) > 0 and
+                        self.is_mouse_over(event, include_label=False,
+                                           width_modifier=1 if self._scroll_bar else 0)):
+                    # Figure out selected line
+                    new_line = event.y - self._y + self._start_line
+                    if self._titles:
+                        new_line -= 1
+                    new_line = min(new_line, len(self._options) - 1)
+
+                    # Update selection and fire select callback if needed.
+                    if new_line >= 0:
+                        self._line = new_line
+                        self.value = self._current_options[self._line][1]
+                        if event.buttons & MouseEvent.DOUBLE_CLICK != 0 and self._on_select:
+                            self._on_select()
+                    return None
+
+                # Check for scroll bar interactions:
+                if self._scroll_bar:
+                    event = self._scroll_bar.process_event(event)
+
+            # Ignore other mouse events.
+            return event
+        else:
+            # Ignore other events
+            return event
+
+        # If we got here, we processed the event - swallow it.
+        return None
+
+
+    @property
+    def _current_options(self):
+        if self._options.__class__ is list:
+            return self._options
+        return self._options()
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, new_value):
+        # Only trigger change notification after we've changed selection
+        old_value = self._value
+        self._value = new_value
+        for i, [_, value] in enumerate(self._current_options):
+            if value == new_value:
+                self._line = i
+                break
+        else:
+            # No matching value - pick a default.
+            if len(self._current_options) > 0:
+                self._line = 0
+                self._value = self._current_options[self._line][1]
+            else:
+                self._line = -1
+                self._value = None
+        if self._validator:
+            self._is_valid = self._validator(self._value)
+        if old_value != self._value and self._on_change:
+            self._on_change()
+
+        # Fix up the start line now that we've explicitly set a new value.
+        self._start_line = max(
+            0, max(self._line - self._h + 1, min(self._start_line, self._line)))
+
+    @property
+    def options(self):
+        """
+        The list of options available for user selection
+
+        This is a list of tuples (<human readable string>, <internal value>).
+        """
+        return self._options
+
+    @options.setter
+    def options(self, new_value):
+        self._options = new_value
+        self.value = self._options[0][1] if len(self._options) > 0 else None
+
 
 
 class MultiColumnListBox(_BaseListBox):
