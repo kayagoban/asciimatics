@@ -3032,8 +3032,8 @@ class FileBrowser(MultiColumnListBox):
         # way of spotting when to insert ".." or not.
         tree_view = []
         if len(self._root) > len(os.path.abspath(os.sep)):
+            tree_view.append(([" ./"], self._root))
             tree_view.append(([" ../"], os.path.join(self._root, "..")))
-            tree_view.append(([" ./"], os.path.join(self._root, ".")))
 
         tree_dirs = []
         tree_files = []
