@@ -3,3 +3,4 @@ mock
 pyfiglet >= 0.7.2
 future
 setuptools_scm
+git+https://github.com/kayagoban/python-qrcode.git

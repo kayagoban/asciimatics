@@ -30,7 +30,9 @@ from asciimatics.screen import Screen, Canvas
 from asciimatics.utilities import readable_timestamp, readable_mem, _DotDict
 from wcwidth import wcswidth, wcwidth
 
-#from tui.debug import debug
+import qrcode
+
+#from shadowlands.tui.debug import debug
 #import pdb
 #debug(self); pdb.set_trace()
 
@@ -1675,6 +1677,7 @@ class Widget(with_metaclass(ABCMeta, object)):
         :param width: The total width of the widget, including labels.
         """
 
+
   
 
 class Label(Widget):
@@ -1736,6 +1739,52 @@ class Label(Widget):
     @property
     def value(self):
         return self._current_text()
+
+
+class QRCode(Widget):
+    def __init__(self, data, invert=False):
+        self._name = None
+        self._label = None
+        self._is_tab_stop = False
+        self._on_blur = None
+        self.data = data
+
+        qr = qrcode.QRCode(
+            version=1,
+            box_size=4,
+            border=1,
+        )
+        qr.add_data(self.data)
+        qr.make(fit=True)
+
+        self.qr_string = qr.print_ascii(string_only=True)
+        self.split_qr_string = self.qr_string.split('\n')
+ 
+    def required_height(self, offset, width):
+        return len(self.split_qr_string)
+
+    def update(self, frame_no):
+       
+        #self._frame.canvas.print_at(o, self._x, self._y,)
+        (colour, attr, bg) = self._frame.palette["label"]
+
+        for i, line in enumerate(self.split_qr_string):
+            self._frame.canvas.print_at(
+                line,
+                self._x,
+                self._y + i,
+                colour, attr, bg)
+
+    def reset(self):
+        pass
+
+    @property
+    def value(self):
+        return self.data 
+
+    def process_event(self, event):
+        return event
+
 
 
 class Divider(Widget):
