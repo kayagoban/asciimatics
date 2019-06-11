@@ -32,8 +32,8 @@ from wcwidth import wcswidth, wcwidth
 
 import qrcode
 
-#from shadowlands.tui.debug import debug
-#import pdb
+from shadowlands.tui.debug import debug
+import pdb
 #debug(self); pdb.set_trace()
 
 # Logging
@@ -1713,9 +1713,11 @@ class Label(Widget):
                 "{:{}{}}".format(text, self._align, self._w), self._x, self._y + i, colour, attr, bg)
 
     def _current_text(self):
+        #debug(); pdb.set_trace()
         if self._text.__class__ == str:
             return self._text
         else:
+            #logging.info("Label executing {}".format(self._text)
             return self._text()
 
     def reset(self):
@@ -1743,6 +1745,7 @@ class Label(Widget):
 
 class QRCode(Widget):
     def __init__(self, data, invert=False):
+        super(QRCode, self).__init__(self)
         self._name = None
         self._label = None
         self._is_tab_stop = False
